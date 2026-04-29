@@ -386,6 +386,73 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         #diagList li.warn { color: var(--fg-muted); }
         #diagList li.err  { color: var(--danger); }
 
+       
+        /* ---------- favorite star ---------- */
+        .fav-btn {
+            position: absolute;
+            top: 6px; right: 6px;
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,.45);
+            border: none;
+            border-radius: 50%;
+            color: #ddd;
+            font-size: 16px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity .15s ease, color .15s ease, background .15s ease;
+            z-index: 2;
+        }
+        .container:hover .fav-btn,
+        .container:focus-within .fav-btn,
+        .fav-btn[aria-pressed="true"] { opacity: 1; }
+        .fav-btn[aria-pressed="true"] { color: #ffce4d; }
+        .fav-btn:hover { background: rgba(0,0,0,.65); }
+
+        /* ---------- command palette ---------- */
+        #paletteModal .panel { width: min(520px, 92vw); padding: 10px; }
+        #paletteInput {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: var(--input-bg);
+            color: var(--fg);
+            border: 1px solid var(--border);
+            font-size: 14px;
+            outline: none;
+        }
+        #paletteInput:focus { border-color: var(--accent); }
+        #paletteList {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 0;
+            max-height: 50vh;
+            overflow: auto;
+        }
+        #paletteList li {
+            padding: 8px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex; gap: 10px; align-items: center;
+            color: var(--fg);
+        }
+        #paletteList li .pal-kind {
+            font-size: 11px;
+            color: var(--fg-muted);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1px 6px;
+            margin-left: auto;
+        }
+        #paletteList li.active,
+        #paletteList li:hover { background: var(--bg-elev-2); }
+        #paletteList li.empty { color: var(--fg-muted); cursor: default; }
+        #paletteList li.empty:hover { background: transparent; }
+
+        /* ---------- focus visibility ---------- */
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .container:focus-visible { outline-offset: -2px; }
+
         /* ---------- responsive nav ---------- */
         @media (max-width: 720px) {
             #nav {
@@ -416,6 +483,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
                     <option value="default">Default order</option>
                     <option value="name">Name (A–Z)</option>
                     <option value="recent">Recently played</option>
+                    <option value="favorites">Favorites first</option>
                 </select>
                 <button id="themeToggle" class="icon-btn" title="Toggle theme (T)" aria-label="Toggle theme">🌙</button>
                 <button id="helpBtn" class="icon-btn" title="Keyboard shortcuts (?)" aria-label="Help">?</button>
@@ -441,9 +509,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     <div id="overlay" class="modal hidden" role="dialog" aria-modal="true" aria-label="Game menu">
         <div class="panel">
             <h3 id="overlayTitle">Game Menu</h3>
+            <div id="crashNotice" class="hidden" style="color:var(--danger); margin:6px 0 10px; font-size:13px;"></div>
             <div class="row">
                 <button id="resumeBtn">Resume</button>
+                <button id="reloadBtn">Reload game</button>
                 <button id="fullscreenBtn">Fullscreen</button>
+                <button id="clearSaveBtn" class="hidden">Clear save</button>
                 <button id="exitBtn" class="danger">Exit to Library</button>
             </div>
             <div class="hint">Press <kbd>Esc</kbd> or <kbd>Alt</kbd>+<kbd>M</kbd> to toggle this menu.</div>
@@ -463,6 +534,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
                 <dt><kbd>F</kbd></dt>                       <dd>Fullscreen (in-game)</dd>
                 <dt><kbd>T</kbd></dt>                       <dd>Toggle theme</dd>
                 <dt><kbd>?</kbd></dt>                       <dd>Show this help</dd>
+                <dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd></dt> <dd>Command palette</dd>
+                <dt><kbd>S</kbd> on a tile</dt>             <dd>Toggle favorite</dd>
+                <dt>Gamepad</dt>                            <dd>D-pad / stick to move, A to open, B to back, Start for menu</dd>
             </dl>
             <h3 style="margin-top:18px;">Settings</h3>
             <div class="row">
@@ -485,6 +559,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
                 <button id="diagContinue">Continue anyway</button>
                 <button id="diagClose" class="danger">Cancel</button>
             </div>
+        </div>
+    </div>
+
+    <!-- command palette -->
+    <div id="paletteModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Command palette">
+        <div class="panel">
+            <input id="paletteInput" type="text" placeholder="Type a command or game name…" aria-label="Command palette" autocomplete="off" spellcheck="false">
+            <ul id="paletteList" role="listbox"></ul>
         </div>
     </div>
 
@@ -516,6 +598,8 @@ const THEME_KEY  = "zg.theme";
 const SORT_KEY   = "zg.sort";
 const RECENT_KEY = "zg.recents";
 const TAGS_KEY   = "zg.activeTags";
+const FAV_KEY    = "zg.favorites";
+const SAVE_PREFIX = "zg.save.";
 const RECENTS_MAX = 200;
 
 /* ---------------- DOM refs ---------------- */
@@ -553,6 +637,12 @@ const dom = {
     diagClose:  $("diagClose"),
     exportSettingsBtn: $("exportSettingsBtn"),
     importSettingsBtn: $("importSettingsBtn"),
+    reloadBtn:  $("reloadBtn"),
+    clearSaveBtn: $("clearSaveBtn"),
+    crashNotice: $("crashNotice"),
+    paletteModal: $("paletteModal"),
+    paletteInput: $("paletteInput"),
+    paletteList: $("paletteList"),
 };
 
 /* ---------------- app state ---------------- */
@@ -567,9 +657,15 @@ const state = {
     tiles:       [],   // {el, game}
     recents:     loadRecents(),
     activeTags:  loadActiveTags(),
+    favorites:   loadFavorites(),
     activePackId: null,
     packs:       [],
     scrollY:     0,
+    lastFocus:   null,
+    crashed:     false,
+    gamepadRAF:  0,
+    gamepadPrev: {},
+    gamepadHold: 0,
 };
 
 /* ---------------- small utils ---------------- */
@@ -592,6 +688,33 @@ function loadActiveTags() {
 }
 function saveActiveTags() {
     safeStorageSet(TAGS_KEY, JSON.stringify([...state.activeTags]));
+}
+
+function loadFavorites() {
+    try {
+        const arr = JSON.parse(safeStorageGet(FAV_KEY) || "[]");
+        return new Set(Array.isArray(arr) ? arr.filter(t => typeof t === "string") : []);
+    } catch { return new Set(); }
+}
+function saveFavorites() {
+    safeStorageSet(FAV_KEY, JSON.stringify([...state.favorites]));
+}
+function toggleFavorite(game) {
+    const k = recentsKey(game);
+    if (state.favorites.has(k)) state.favorites.delete(k);
+    else state.favorites.add(k);
+    saveFavorites();
+    refreshFavoriteStars();
+    if (dom.sort.value === "favorites") applySortAndFilter();
+}
+function refreshFavoriteStars() {
+    for (const { el, game } of state.tiles) {
+        const btn = el.querySelector(".fav-btn");
+        if (!btn) continue;
+        const on = state.favorites.has(recentsKey(game));
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        btn.textContent = on ? "★" : "☆";
+    }
 }
 function saveRecents() {
     const entries = Object.entries(state.recents)
@@ -895,8 +1018,20 @@ function buildTile(game) {
     tile.className = "container no-cover";
     tile.tabIndex = 0;
     tile.setAttribute("role", "button");
+    tile.setAttribute("aria-label", game.displayName || game.fileName);
     tile.dataset.cover = game.cover || "";
     if (game.description) tile.title = game.description;
+
+    const isFav = state.favorites.has(recentsKey(game));
+    const fav = document.createElement("button");
+    fav.type = "button";
+    fav.className = "fav-btn";
+    fav.setAttribute("aria-pressed", isFav ? "true" : "false");
+    fav.setAttribute("aria-label", "Toggle favorite");
+    fav.title = "Favorite (S)";
+    fav.textContent = isFav ? "★" : "☆";
+    fav.addEventListener("click", (e) => { e.stopPropagation(); toggleFavorite(game); });
+    tile.appendChild(fav);
 
     const label = document.createElement("p");
     label.textContent = game.displayName || game.fileName;
@@ -926,6 +1061,9 @@ function buildTile(game) {
             e.preventDefault();
             if (e.ctrlKey || e.metaKey) openGameNewTab(game);
             else openGame(game);
+        } else if (e.key === "s" || e.key === "S") {
+            e.preventDefault();
+            toggleFavorite(game);
         }
     });
 
@@ -1018,6 +1156,13 @@ function applySortAndFilter() {
         visible.sort((a, b) =>
             (state.recents[recentsKey(b.game)] || 0) -
             (state.recents[recentsKey(a.game)] || 0));
+    } else if (sortMode === "favorites") {
+        visible.sort((a, b) => {
+            const fa = state.favorites.has(recentsKey(a.game)) ? 1 : 0;
+            const fb = state.favorites.has(recentsKey(b.game)) ? 1 : 0;
+            if (fa !== fb) return fb - fa;
+            return a.game.__index - b.game.__index;
+        });
     } else {
         visible.sort((a, b) => a.game.__index - b.game.__index);
     }
@@ -1060,7 +1205,12 @@ async function openGame(game) {
     state.scrollY     = window.scrollY;
     state.currentGame = game;
     state.gameOpen    = true;
+    state.crashed     = false;
+    state.lastFocus   = document.activeElement;
     dom.overlayTitle.textContent = game.displayName || "Game Menu";
+    dom.crashNotice.classList.add("hidden");
+    dom.crashNotice.textContent = "";
+    dom.clearSaveBtn.classList.toggle("hidden", !hasSave(game));
 
     state.recents[recentsKey(game)] = Date.now();
     saveRecents();
@@ -1073,6 +1223,7 @@ async function openGame(game) {
         const onLoad = () => {
             dom.frame.removeEventListener("load", onLoad);
             attachInnerKeyHandler();
+            attachInnerCrashHandler();
             try { dom.frame.contentWindow?.focus(); } catch {}
             hideLoader();
         };
@@ -1117,9 +1268,17 @@ function closeGame() {
 
     state.gameOpen    = false;
     state.currentGame = null;
+    state.crashed     = false;
+    dom.crashNotice.classList.add("hidden");
+    dom.crashNotice.textContent = "";
 
     refreshRecentsBadges();
     if (dom.sort.value === "recent") applySortAndFilter();
+
+    // restore previous focus where possible
+    if (state.lastFocus && document.contains(state.lastFocus)) {
+        try { state.lastFocus.focus(); } catch {}
+    }
 }
 
 function refreshRecentsBadges() {
@@ -1158,6 +1317,21 @@ function toggleOverlay() {
 
 dom.resumeBtn.addEventListener("click", hideOverlay);
 dom.exitBtn.addEventListener("click", closeGame);
+dom.reloadBtn.addEventListener("click", () => {
+    if (!state.currentGame) return;
+    const g = state.currentGame;
+    hideOverlay();
+    // re-open same game by closing then re-opening
+    closeGame();
+    setTimeout(() => openGame(g), 220);
+});
+dom.clearSaveBtn.addEventListener("click", () => {
+    if (!state.currentGame) return;
+    if (!confirm(`Clear saved data for "${state.currentGame.displayName || state.currentGame.fileName}"?`)) return;
+    clearSave(state.currentGame);
+    dom.clearSaveBtn.classList.add("hidden");
+    toast("Save cleared");
+});
 dom.overlay.addEventListener("click", (e) => {
     if (e.target === dom.overlay) hideOverlay();
 });
@@ -1236,8 +1410,21 @@ document.addEventListener("keydown", (e) => {
         return;
     }
 
+    // Ctrl/Cmd+K opens command palette regardless of focus
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        togglePalette();
+        return;
+    }
+
+    if (e.key === "Escape" && !dom.paletteModal.classList.contains("hidden")) {
+        hidePalette(); return;
+    }
     if (e.key === "Escape" && !dom.helpModal.classList.contains("hidden")) {
         hideHelp(); return;
+    }
+    if (e.key === "Escape" && !dom.diagModal.classList.contains("hidden")) {
+        dom.diagModal.classList.add("hidden"); return;
     }
 
     if (isTypingTarget(e.target)) {
@@ -1636,7 +1823,342 @@ dom.diagModal.addEventListener("click", (e) => {
     if (e.target === dom.diagModal) dom.diagModal.classList.add("hidden");
 });
 
+/* ---------------- per-game saves bridge ----------------
+ * Games can communicate with the launcher via window.parent.postMessage.
+ * Protocol (string id "zg-save"):
+ *   { id: "zg-save", op: "get",   key }                -> reply { value }
+ *   { id: "zg-save", op: "set",   key, value }         -> reply { ok }
+ *   { id: "zg-save", op: "del",   key }                -> reply { ok }
+ *   { id: "zg-save", op: "clear" }                     -> reply { ok }
+ * Saves are namespaced per game id/fileName under SAVE_PREFIX.
+ * Replies are sent via event.source.postMessage with the same reqId.
+ * ---------------------------------------------------- */
+function gameSaveNs(game) {
+    if (!game) return null;
+    const k = (game.id || game.fileName || "").toString();
+    return k ? SAVE_PREFIX + k : null;
+}
+function readSaveBag(game) {
+    const ns = gameSaveNs(game);
+    if (!ns) return {};
+    try { return JSON.parse(safeStorageGet(ns) || "{}") || {}; }
+    catch { return {}; }
+}
+function writeSaveBag(game, bag) {
+    const ns = gameSaveNs(game);
+    if (!ns) return;
+    safeStorageSet(ns, JSON.stringify(bag));
+}
+function hasSave(game) {
+    const ns = gameSaveNs(game);
+    if (!ns) return false;
+    const v = safeStorageGet(ns);
+    return !!v && v !== "{}";
+}
+function clearSave(game) {
+    const ns = gameSaveNs(game);
+    if (!ns) return;
+    try { localStorage.removeItem(ns); } catch {}
+}
+
+window.addEventListener("message", (ev) => {
+    const data = ev.data;
+    if (!data || typeof data !== "object" || data.id !== "zg-save") return;
+    if (!state.gameOpen || !state.currentGame) return;
+    if (ev.source !== dom.frame.contentWindow) return;
+    const reply = (payload) => {
+        try { ev.source.postMessage({ id: "zg-save-reply", reqId: data.reqId, ...payload }, "*"); }
+        catch {}
+    };
+    const bag = readSaveBag(state.currentGame);
+    try {
+        if (data.op === "get") {
+            reply({ value: Object.prototype.hasOwnProperty.call(bag, data.key) ? bag[data.key] : null });
+        } else if (data.op === "set") {
+            bag[data.key] = data.value;
+            writeSaveBag(state.currentGame, bag);
+            dom.clearSaveBtn.classList.remove("hidden");
+            reply({ ok: true });
+        } else if (data.op === "del") {
+            delete bag[data.key];
+            writeSaveBag(state.currentGame, bag);
+            reply({ ok: true });
+        } else if (data.op === "clear") {
+            clearSave(state.currentGame);
+            dom.clearSaveBtn.classList.add("hidden");
+            reply({ ok: true });
+        } else {
+            reply({ ok: false, error: "unknown op" });
+        }
+    } catch (e) {
+        reply({ ok: false, error: String(e && e.message || e) });
+    }
+});
+
+/* ---------------- iframe crash recovery ---------------- */
+function showCrash(message) {
+    if (!state.gameOpen) return;
+    state.crashed = true;
+    dom.crashNotice.textContent = "The game reported an error: " + message;
+    dom.crashNotice.classList.remove("hidden");
+    showOverlay();
+}
+function attachInnerCrashHandler() {
+    try {
+        const w = dom.frame.contentWindow;
+        if (!w) return;
+        w.addEventListener("error", (ev) => {
+            const msg = (ev && (ev.message || (ev.error && ev.error.message))) || "Unknown error";
+            showCrash(String(msg).slice(0, 200));
+        });
+        w.addEventListener("unhandledrejection", (ev) => {
+            const reason = ev && ev.reason;
+            const msg = (reason && (reason.message || String(reason))) || "Unhandled rejection";
+            showCrash(String(msg).slice(0, 200));
+        });
+    } catch { /* cross-origin; can't observe */ }
+}
+
+/* ---------------- command palette ---------------- */
+let _paletteIdx = 0;
+let _paletteItems = [];
+
+function paletteActions() {
+    const acts = [
+        { kind: "Action", label: "Toggle theme", run: toggleTheme },
+        { kind: "Action", label: "Show keyboard shortcuts", run: showHelp },
+        { kind: "Action", label: "Export settings", run: exportSettings },
+        { kind: "Action", label: "Import settings", run: importSettings },
+    ];
+    if (state.zipLoaded) {
+        acts.push({ kind: "Action", label: "Add another pack\u2026", run: openFilePicker });
+        acts.push({ kind: "Action", label: "Remove active pack", run: removeActivePack });
+    } else {
+        acts.push({ kind: "Action", label: "Load a pack\u2026", run: openFilePicker });
+    }
+    for (const p of state.packs || []) {
+        if (p.id !== state.activePackId) {
+            acts.push({
+                kind: "Pack",
+                label: "Switch to: " + p.name,
+                run: async () => { try { await setActivePackId(p.id); } catch {} location.reload(); }
+            });
+        }
+    }
+    return acts;
+}
+
+function showPalette() {
+    if (state.gameOpen) return;
+    state.lastFocus = document.activeElement;
+    dom.paletteInput.value = "";
+    renderPalette("");
+    dom.paletteModal.classList.remove("hidden");
+    dom.paletteInput.focus();
+}
+function hidePalette() {
+    if (dom.paletteModal.classList.contains("hidden")) return;
+    dom.paletteModal.classList.add("hidden");
+    if (state.lastFocus && document.contains(state.lastFocus)) {
+        try { state.lastFocus.focus(); } catch {}
+    }
+}
+function togglePalette() {
+    if (dom.paletteModal.classList.contains("hidden")) showPalette();
+    else hidePalette();
+}
+
+function renderPalette(query) {
+    const q = (query || "").trim().toLowerCase();
+    const items = [];
+
+    if (state.zipLoaded && state.tiles.length) {
+        for (const { game } of state.tiles) {
+            const name = game.displayName || game.fileName;
+            if (!q || name.toLowerCase().includes(q) ||
+                (game.description || "").toLowerCase().includes(q)) {
+                items.push({
+                    kind: "Game",
+                    label: name,
+                    run: () => { hidePalette(); openGame(game); },
+                });
+                if (items.length > 80) break;
+            }
+        }
+    }
+    for (const a of paletteActions()) {
+        if (!q || a.label.toLowerCase().includes(q)) items.push(a);
+    }
+
+    _paletteItems = items;
+    _paletteIdx = items.length ? 0 : -1;
+
+    dom.paletteList.innerHTML = "";
+    if (items.length === 0) {
+        const li = document.createElement("li");
+        li.className = "empty";
+        li.textContent = "No matches";
+        dom.paletteList.appendChild(li);
+        return;
+    }
+    items.forEach((it, i) => {
+        const li = document.createElement("li");
+        li.setAttribute("role", "option");
+        li.dataset.idx = String(i);
+        if (i === _paletteIdx) li.classList.add("active");
+        const label = document.createElement("span");
+        label.textContent = it.label;
+        const kind = document.createElement("span");
+        kind.className = "pal-kind";
+        kind.textContent = it.kind;
+        li.appendChild(label);
+        li.appendChild(kind);
+        li.addEventListener("mouseenter", () => setPaletteIdx(i));
+        li.addEventListener("click", () => runPaletteIdx(i));
+        dom.paletteList.appendChild(li);
+    });
+}
+function setPaletteIdx(i) {
+    if (i < 0 || i >= _paletteItems.length) return;
+    _paletteIdx = i;
+    for (const el of dom.paletteList.children) el.classList.remove("active");
+    const cur = dom.paletteList.children[i];
+    if (cur) {
+        cur.classList.add("active");
+        cur.scrollIntoView({ block: "nearest" });
+    }
+}
+function runPaletteIdx(i) {
+    const it = _paletteItems[i];
+    if (!it) return;
+    hidePalette();
+    try { it.run(); } catch (e) { toast("Action failed: " + (e.message || e), { error: true }); }
+}
+
+dom.paletteInput.addEventListener("input", () => renderPalette(dom.paletteInput.value));
+dom.paletteInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setPaletteIdx(Math.min(_paletteIdx + 1, _paletteItems.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setPaletteIdx(Math.max(_paletteIdx - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); if (_paletteIdx >= 0) runPaletteIdx(_paletteIdx); }
+    else if (e.key === "Escape") { e.preventDefault(); hidePalette(); }
+});
+dom.paletteModal.addEventListener("click", (e) => {
+    if (e.target === dom.paletteModal) hidePalette();
+});
+
+/* ---------------- gamepad navigation ---------------- */
+function gamepadTick() {
+    state.gamepadRAF = requestAnimationFrame(gamepadTick);
+    if (state.gameOpen) return;
+    if (!dom.paletteModal.classList.contains("hidden")) return;
+    if (!dom.helpModal.classList.contains("hidden")) return;
+
+    const pads = (navigator.getGamepads ? navigator.getGamepads() : []) || [];
+    const pad = [...pads].find(p => p && p.connected);
+    if (!pad) return;
+
+    const now = performance.now();
+    const cooldown = 180; // ms between repeats
+
+    const pressed = (i) => !!(pad.buttons[i] && pad.buttons[i].pressed);
+    const justPressed = (i) => {
+        const cur = pressed(i);
+        const prev = !!state.gamepadPrev[i];
+        state.gamepadPrev[i] = cur;
+        return cur && !prev;
+    };
+
+    // Axes 0/1 = left stick. 12-15 = D-pad on standard mapping.
+    const ax = pad.axes[0] || 0, ay = pad.axes[1] || 0;
+    const dz = 0.4;
+    let dir = null;
+    if (pressed(14) || ax < -dz)      dir = "ArrowLeft";
+    else if (pressed(15) || ax > dz)  dir = "ArrowRight";
+    else if (pressed(12) || ay < -dz) dir = "ArrowUp";
+    else if (pressed(13) || ay > dz)  dir = "ArrowDown";
+
+    if (dir) {
+        if (now - state.gamepadHold > cooldown) {
+            state.gamepadHold = now;
+            navigateGrid({ key: dir, preventDefault: () => {} });
+        }
+    } else {
+        state.gamepadHold = 0;
+    }
+
+    // A (0) = open, B (1) = back/clear, Start (9) = palette
+    if (justPressed(0)) {
+        const el = document.activeElement;
+        if (el && el.classList && el.classList.contains("container")) el.click();
+    }
+    if (justPressed(1)) {
+        if (dom.search.value) { dom.search.value = ""; applySortAndFilter(); }
+    }
+    if (justPressed(9)) togglePalette();
+}
+function startGamepadLoop() {
+    if (state.gamepadRAF) return;
+    if (typeof navigator.getGamepads !== "function") return;
+    state.gamepadRAF = requestAnimationFrame(gamepadTick);
+}
+
+/* ---------------- focus trap for modals ---------------- */
+function trapFocus(modalEl) {
+    modalEl.addEventListener("keydown", (e) => {
+        if (e.key !== "Tab") return;
+        if (modalEl.classList.contains("hidden")) return;
+        const focusables = modalEl.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const list = [...focusables].filter(el => !el.disabled && el.offsetParent !== null);
+        if (list.length === 0) return;
+        const first = list[0], last = list[list.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault(); first.focus();
+        }
+    });
+}
+trapFocus(dom.helpModal);
+trapFocus(dom.diagModal);
+trapFocus(dom.paletteModal);
+trapFocus(dom.overlay);
+
+/* ---------------- a11y polish ---------------- */
+// re-emit aria-pressed on tag chips after build
+const _origBuildTagBar = buildTagBar;
+buildTagBar = function () {
+    _origBuildTagBar();
+    for (const c of dom.tagBar.querySelectorAll(".chip:not(.clear)")) {
+        c.setAttribute("aria-pressed", c.classList.contains("active") ? "true" : "false");
+        const orig = c.onclick;
+        c.addEventListener("click", () => {
+            c.setAttribute("aria-pressed", c.classList.contains("active") ? "true" : "false");
+        });
+    }
+};
+
+// help modal show/hide with aria + focus restore
+const _origShowHelp = showHelp;
+const _origHideHelp = hideHelp;
+showHelp = function () {
+    state.lastFocus = document.activeElement;
+    _origShowHelp();
+};
+hideHelp = function () {
+    _origHideHelp();
+    if (state.lastFocus && document.contains(state.lastFocus)) {
+        try { state.lastFocus.focus(); } catch {}
+    }
+};
+// rebind listeners that referenced the originals
+dom.helpBtn.removeEventListener("click", _origShowHelp);
+dom.helpBtn.addEventListener("click", showHelp);
+dom.helpClose.removeEventListener("click", _origHideHelp);
+dom.helpClose.addEventListener("click", hideHelp);
+
 /* ---------------- init ---------------- */
+/* (helpers for saves, crash, palette, gamepad live above)  */
 dom.wiper.addEventListener("click", removeActivePack);
 
 window.addEventListener("beforeunload", () => {
@@ -1648,11 +2170,13 @@ window.addEventListener("load", async () => {
     initTheme();
 
     const savedSort = safeStorageGet(SORT_KEY);
-    if (savedSort && ["default", "name", "recent"].includes(savedSort)) {
+    if (savedSort && ["default", "name", "recent", "favorites"].includes(savedSort)) {
         dom.sort.value = savedSort;
     }
 
     wireGlobalDrop();
+    window.addEventListener("gamepadconnected", startGamepadLoop);
+    startGamepadLoop();
 
     let packs = [];
     try { packs = await listPacks(); } catch {}
