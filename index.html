@@ -85,10 +85,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         /* ---------- nav ---------- */
         #nav {
             flex-shrink: 0;
-            padding: 12px 24px;
+            padding: 10px 16px;
             display: grid;
-            grid-template-columns: 1fr 2fr 1fr;
-            gap: 12px;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
+            gap: 10px;
             align-items: center;
             background: var(--bg-elev);
             border-bottom: 1px solid var(--border);
@@ -96,9 +96,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             position: sticky;
             top: 0;
         }
-        .nav-left   { display: flex; justify-content: flex-start; align-items: center; gap: 12px; min-width: 0; }
-        .nav-center { display: flex; justify-content: center; }
-        .nav-right  { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .nav-left   { display: flex; justify-content: flex-start; align-items: center; gap: 10px; min-width: 0; }
+        .nav-center { display: flex; justify-content: center; min-width: 0; }
+        .nav-right  { display: flex; justify-content: flex-end; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 
         #brand {
             margin: 0;
@@ -142,6 +142,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             max-width: 480px;
         }
         select { padding-right: 8px; }
+        #packSwitcher {
+            max-width: 180px;
+            min-width: 0;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .nav-right select { max-width: 160px; }
 
         /* ---------- grid ---------- */
         #games {
@@ -242,9 +250,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             border: 1px solid var(--border);
             border-radius: 14px;
             padding: 22px 24px;
-            min-width: 280px;
-            max-width: min(520px, 92vw);
+            min-width: 0;
+            max-width: min(520px, calc(100vw - 24px));
+            max-height: calc(100vh - 24px);
+            overflow: auto;
             box-shadow: 0 10px 30px rgba(0,0,0,.45);
+        }
+        @media (max-width: 480px) {
+            .modal .panel { padding: 16px; border-radius: 12px; }
         }
         .modal h3 { margin: 0 0 14px; font-size: 1.05rem; }
         .modal .row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -297,7 +310,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         /* ---------- toast / status ---------- */
         #toast {
             position: fixed;
-            bottom: 20px;
+            bottom: max(20px, env(safe-area-inset-bottom, 0px));
             left: 50%;
             transform: translateX(-50%) translateY(20px);
             background: var(--bg-elev);
@@ -310,13 +323,31 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             pointer-events: none;
             transition: opacity .2s ease, transform .2s ease;
             z-index: 300;
-            max-width: 80vw;
+            max-width: min(560px, calc(100vw - 24px));
+            width: max-content;
+            font-size: 14px;
+            line-height: 1.35;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
+            text-align: center;
         }
         #toast.show {
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
         #toast.error { border-color: var(--danger); }
+        @media (max-width: 480px) {
+            #toast {
+                left: 12px;
+                right: 12px;
+                transform: translateY(20px);
+                max-width: none;
+                width: auto;
+                padding: 9px 14px;
+                font-size: 13px;
+            }
+            #toast.show { transform: translateY(0); }
+        }
 
         /* ---------- loading spinner ---------- */
         #loader {
@@ -387,10 +418,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         #diagList li.err  { color: var(--danger); }
 
         /* ---------- error log ---------- */
-        #errorModal .panel { width: min(880px, 96vw); max-height: 90vh; display: flex; flex-direction: column; }
+        #errorModal .panel { width: min(880px, 96vw); max-height: 90vh; display: flex; flex-direction: column; padding: 18px 20px; }
         #errorModal h3 { margin: 0 0 4px; }
         #errorSummary { color: var(--fg-muted); font-size: 13px; margin: 0 0 10px; }
-        #errorTableWrap { overflow: auto; flex: 1; border: 1px solid var(--border); border-radius: 8px; }
+        #errorTableWrap { overflow: auto; flex: 1; border: 1px solid var(--border); border-radius: 8px; -webkit-overflow-scrolling: touch; }
         #errorTable {
             width: 100%;
             border-collapse: collapse;
@@ -431,6 +462,63 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         #errorTable .recovery  { display: flex; flex-wrap: wrap; gap: 4px; }
         #errorTable .recovery button { font-size: 11px; padding: 3px 8px; border-radius: 6px; }
         #errorTable tr.empty td { text-align: center; color: var(--fg-muted); padding: 24px; }
+
+        /* error footer row */
+        #errorModal .error-footer {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        #errorModal .error-footer .group { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        /* card layout on narrow screens */
+        @media (max-width: 720px) {
+            #errorModal .panel { width: 100%; max-height: 100vh; height: 100vh; border-radius: 0; padding: 14px; }
+            #errorTableWrap { border: none; }
+            #errorTable { min-width: 0; display: block; }
+            #errorTable thead { display: none; }
+            #errorTable tbody, #errorTable tr { display: block; }
+            #errorTable tr {
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 8px 10px;
+                margin-bottom: 8px;
+                background: var(--bg-elev-2);
+            }
+            #errorTable tbody td {
+                display: grid;
+                grid-template-columns: 80px 1fr;
+                gap: 8px;
+                padding: 4px 0;
+                border-bottom: none;
+                align-items: start;
+            }
+            #errorTable tbody td::before {
+                content: attr(data-label);
+                color: var(--fg-muted);
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                padding-top: 2px;
+            }
+            #errorTable .msg { max-width: none; }
+            #errorTable tr.empty {
+                display: block;
+                background: transparent;
+                border: none;
+            }
+            #errorTable tr.empty td {
+                display: block;
+                text-align: center;
+            }
+            #errorTable tr.empty td::before { content: none; }
+        }
+        @media (max-width: 720px) and (orientation: landscape) {
+            #errorModal .panel { height: 100vh; }
+        }
         #errorBadge {
             display: none;
             min-width: 16px; height: 16px;
@@ -515,14 +603,40 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         .container:focus-visible { outline-offset: -2px; }
 
         /* ---------- responsive nav ---------- */
+        @media (max-width: 960px) {
+            #nav {
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                grid-template-areas:
+                    "left  right"
+                    "center center";
+                row-gap: 8px;
+            }
+            .nav-left   { grid-area: left; }
+            .nav-right  { grid-area: right; justify-content: flex-end; }
+            .nav-center { grid-area: center; }
+            input#search { max-width: none; }
+            #brand { font-size: 1rem; }
+        }
         @media (max-width: 720px) {
             #nav {
+                padding: 8px 10px;
                 grid-template-columns: 1fr;
+                grid-template-areas:
+                    "left"
+                    "center"
+                    "right";
                 gap: 8px;
             }
-            .nav-left, .nav-center, .nav-right {
-                justify-content: center;
-            }
+            .nav-left   { justify-content: space-between; flex-wrap: wrap; }
+            .nav-right  { justify-content: flex-start; flex-wrap: wrap; gap: 6px; }
+            .nav-center { justify-content: stretch; }
+            #packMeta { display: none; }
+            .nav-right select,
+            #packSwitcher { flex: 1 1 auto; max-width: none; }
+        }
+        @media (max-width: 420px) {
+            button.icon-btn { padding: 6px 8px; }
+            #wiper { font-size: 12px; padding: 6px 10px; }
         }
     </style>
 </head>
@@ -647,8 +761,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
                     </tbody>
                 </table>
             </div>
-            <div class="row" style="margin-top:10px; justify-content: space-between;">
-                <div class="row" style="gap:6px;">
+            <div class="error-footer">
+                <div class="group">
                     <button id="errorCopyBtn" title="Copy log as JSON to the clipboard">Copy log</button>
                     <button id="errorClearBtn" class="danger" title="Clear all recorded errors">Clear log</button>
                 </div>
@@ -1986,11 +2100,13 @@ function renderErrorTable() {
 
         const tdTime = document.createElement("td");
         tdTime.className = "src";
+        tdTime.dataset.label = "Time";
         tdTime.textContent = new Date(e.ts).toLocaleTimeString();
         tdTime.title = new Date(e.ts).toLocaleString();
         tr.appendChild(tdTime);
 
         const tdSev = document.createElement("td");
+        tdSev.dataset.label = "Severity";
         const sev = document.createElement("span");
         sev.className = "sev " + e.severity;
         sev.textContent = e.severity;
@@ -1998,6 +2114,7 @@ function renderErrorTable() {
         tr.appendChild(tdSev);
 
         const tdCode = document.createElement("td");
+        tdCode.dataset.label = "Code";
         const code = document.createElement("code");
         code.className = "code";
         code.textContent = e.code;
@@ -2006,16 +2123,19 @@ function renderErrorTable() {
 
         const tdMsg = document.createElement("td");
         tdMsg.className = "msg";
+        tdMsg.dataset.label = "Message";
         tdMsg.textContent = e.message;
         if (e.detail?.stack) tdMsg.title = e.detail.stack;
         tr.appendChild(tdMsg);
 
         const tdSrc = document.createElement("td");
         tdSrc.className = "src";
+        tdSrc.dataset.label = "Source";
         tdSrc.textContent = e.source;
         tr.appendChild(tdSrc);
 
         const tdRec = document.createElement("td");
+        tdRec.dataset.label = "Recovery";
         const rec = document.createElement("div");
         rec.className = "recovery";
         const seen = new Set();
